@@ -1,15 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { envs } from 'src/config/envs';
 import Stripe from 'stripe';
 import { PaymentSessionDto } from './dto/payment-session.dto';
 import { Request, Response } from 'express';
+import { ClientProxy } from '@nestjs/microservices';
+
+import { Inject, Injectable } from '@nestjs/common';
+import { envs, NATS_SERVICES } from 'src/config';
 
 @Injectable()
 export class PaymentsService {
   private readonly stripeservices = new Stripe(envs.stripeSecret);
 
-  async createPaymentSession(paymenSessionDto: PaymentSessionDto) {
-    const { currency, items, orderId } = paymenSessionDto;
+  constructor(@Inject(NATS_SERVICES) private readonly client: ClientProxy) {}
+  async createPaymentSession(paymentSessionDto: PaymentSessionDto) {
+    const { currency, items, orderId } = paymentSessionDto;
 
     const lineItems = items.map((item) => ({
       price_data: {
@@ -59,6 +62,7 @@ export class PaymentsService {
           orderId: chargeSucceeded.metadata.orderId,
           receiptUrl: chargeSucceeded.receipt_url,
         };
+        this.client.emit('payment.succeeded', payload);
         console.log(payload);
         break;
 
